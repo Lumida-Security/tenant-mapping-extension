@@ -1,12 +1,13 @@
 # Tenant Name Mapper Chrome Extension
 
-A Chrome extension that adds tenant names to Temporal Cloud workflows and ClickHouse Cloud databases, making it easy to identify which tenant each workflow or database belongs to.
+A Chrome extension that adds tenant names to Temporal Cloud workflows, ClickHouse Cloud databases, and Datadog traces, making it easy to identify which tenant each workflow, database, or trace belongs to.
 
 ## Features
 
 - **Temporal Cloud**: Adds a "Tenant Name" column after the "Workflow ID" column
 - **ClickHouse Cloud**: Adds tenant names next to UUID database names in the database picker
-- Automatically extracts tenant IDs from workflow IDs and database names
+- **Datadog**: Adds tenant name badges next to account UUIDs in trace panel URLs and JSON attributes
+- Automatically extracts tenant IDs from workflow IDs, database names, and URL paths
 - Configurable tenant ID to name mappings via options page
 - Enable/disable functionality per site
 - Settings sync across Chrome browsers
@@ -51,6 +52,15 @@ A Chrome extension that adds tenant names to Temporal Cloud workflows and ClickH
 1. Navigate to your ClickHouse Cloud console
 2. Click the database picker dropdown
 3. Look for tenant names appended to UUID database names
+
+### 4. Test on Datadog
+
+1. Navigate to Datadog trace panel (APM traces)
+2. Open a trace that contains URLs with `/accounts/{uuid}/` pattern
+3. Look for green tenant name badges next to:
+   - HTTP Path in the URL Details section
+   - URL button in the HTTP Requests section
+   - `url` and `path` attributes in the Span Attributes table
 
 ## Configuration
 
@@ -119,6 +129,17 @@ Once configured, the extension automatically:
 3. Appends tenant names next to UUID database names
 4. Format: `0197cb9b-... (Tenant Name)`
 
+### Datadog
+
+Once configured, the extension automatically:
+1. Detects when you're on a Datadog page with trace panels
+2. Scans for URLs containing `/accounts/{uuid}/` pattern
+3. Adds green tenant name badges next to account UUIDs in:
+   - HTTP Requests section (URL and HTTP Path buttons)
+   - Span Attributes table (url and path cells)
+   - JSON viewer panel (accountId keys)
+4. Updates automatically when navigating between traces
+
 ## Import/Export
 
 ### Export Mappings
@@ -139,23 +160,27 @@ The extension supports both **Light Mode** and **Dark Mode** in Temporal Cloud. 
 |------|-------------|---------|
 | Temporal Cloud | `https://cloud.temporal.io/namespaces/*/workflows*` | Adds "Tenant Name" column |
 | ClickHouse Cloud | `https://console.clickhouse.cloud/services/*` | Appends names to UUID databases |
+| Datadog | `https://app.datadoghq.com/*` | Adds badges to account UUIDs in traces |
 
 ## File Structure
 
 ```
-temporal-extension/
+tenant-mapping-extension/
 ├── manifest.json            # Extension configuration
 ├── shared.js                # Shared utilities for all sites
 ├── content-temporal.js      # Temporal Cloud DOM manipulation
 ├── content-clickhouse.js    # ClickHouse Cloud DOM manipulation
+├── content-datadog.js       # Datadog trace panel DOM manipulation
 ├── options.html             # Settings page UI
 ├── options.js               # Settings page logic
 ├── styles-temporal.css      # Temporal column styling
 ├── styles-clickhouse.css    # ClickHouse label styling
+├── styles-datadog.css       # Datadog badge styling
 ├── icons/                   # Extension icons
 │   ├── icon16.png
 │   ├── icon48.png
 │   └── icon128.png
+├── tenant-mappings.json     # Default tenant mappings
 └── README.md                # This file
 ```
 
@@ -178,7 +203,7 @@ temporal-extension/
 ### Debugging
 
 - Open Chrome DevTools on the target page to see content script logs
-- Look for messages starting with `[Temporal Extension]` or `[ClickHouse Extension]`
+- Look for messages starting with `[Temporal Extension]`, `[ClickHouse Extension]`, or `[Datadog Extension]`
 - Visit `chrome://extensions/` → Click "Errors" to see any errors
 
 ## Browser Compatibility
@@ -213,6 +238,15 @@ temporal-extension/
 3. Try exporting your mappings to verify the format
 4. Ensure the UUID is a valid format (8-4-4-4-12 hexadecimal)
 
+### Datadog: Badges not appearing
+
+1. Make sure you're on `https://app.datadoghq.com/*`
+2. Check that Datadog is enabled in extension options
+3. Open a trace panel with URLs containing `/accounts/{uuid}/` pattern
+4. Verify tenant mappings are configured in Options
+5. Check the browser console for `[Datadog Extension]` logs
+6. Ensure the account UUID in the URL matches your mappings
+
 ### Extension not loading
 
 1. Check for errors in `chrome://extensions/`
@@ -221,7 +255,7 @@ temporal-extension/
 
 ## Privacy
 
-- This extension only runs on Temporal Cloud and ClickHouse Cloud pages
+- This extension only runs on Temporal Cloud, ClickHouse Cloud, and Datadog pages
 - All data is stored locally in your browser's sync storage
 - No data is sent to external servers
 - The extension does not modify any functionality of the target sites
@@ -233,4 +267,4 @@ MIT License - feel free to modify and distribute
 
 ---
 
-**Note**: This is an unofficial extension and is not affiliated with or endorsed by Temporal Technologies Inc. or ClickHouse Inc.
+**Note**: This is an unofficial extension and is not affiliated with or endorsed by Temporal Technologies Inc., ClickHouse Inc., or Datadog Inc.
