@@ -324,7 +324,7 @@
 <body>
   <div class="container">
     <h1>Tenant Name Mapper</h1>
-    <p class="subtitle">Configure tenant ID to name mappings for Temporal Cloud and ClickHouse Cloud</p>
+    <p class="subtitle">Configure tenant ID to name mappings for Temporal Cloud, ClickHouse Cloud, and Datadog</p>
 
     <div id="message" class="message hidden"></div>
 
@@ -346,6 +346,14 @@
             <span class="toggle-text">ClickHouse Cloud</span>
           </label>
           <span class="site-url">console.clickhouse.cloud</span>
+        </div>
+        <div class="site-toggle">
+          <label class="toggle-label">
+            <input type="checkbox" id="datadogEnabled" checked>
+            <span class="toggle-switch"></span>
+            <span class="toggle-text">Datadog</span>
+          </label>
+          <span class="site-url">app.datadoghq.com</span>
         </div>
       </div>
     </div>

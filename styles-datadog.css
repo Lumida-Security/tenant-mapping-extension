@@ -1,0 +1,57 @@
+/* Datadog Log Explorer Tenant Name Extension - Styles */
+/* Styles for tenant name labels in JSON viewer panel - matches Datadog's design language */
+
+/* Tenant name label styling - badge-like appearance matching Datadog's UI */
+.tenant-name-label {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 2px 8px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.4;
+  border-radius: 3px;
+  white-space: nowrap;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  background-color: #3b82f6;
+  color: #ffffff;
+  border: 1px solid #2563eb;
+  transition: all 0.15s ease;
+}
+
+/* Light theme */
+@media (prefers-color-scheme: light) {
+  .tenant-name-label {
+    background-color: #3b82f6;
+    color: #ffffff;
+    border-color: #2563eb;
+  }
+  
+  .tenant-name-label:hover {
+    background-color: #2563eb;
+    border-color: #1d4ed8;
+  }
+}
+
+/* Dark theme */
+@media (prefers-color-scheme: dark) {
+  .tenant-name-label {
+    background-color: #3b82f6;
+    color: #ffffff;
+    border-color: #2563eb;
+  }
+  
+  .tenant-name-label:hover {
+    background-color: #2563eb;
+    border-color: #1d4ed8;
+  }
+}
+
+/* Hover state for JSON viewer rows with tenant names */
+.druids_misc_json-viewer_row-layout:hover .tenant-name-label {
+  transform: translateY(-0.5px);
+}
+
+/* Focus/active state */
+.druids_misc_json-viewer_row-layout--interactive:active .tenant-name-label {
+  transform: scale(0.98);
+}

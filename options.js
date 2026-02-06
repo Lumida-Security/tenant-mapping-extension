@@ -17,13 +17,15 @@
   const importFile = document.getElementById('importFile');
   const temporalEnabled = document.getElementById('temporalEnabled');
   const clickhouseEnabled = document.getElementById('clickhouseEnabled');
+  const datadogEnabled = document.getElementById('datadogEnabled');
 
   let tenantMappings = {};
   let bundledMappings = {};
   let userMappings = {};
   let siteSettings = {
     temporal: true,
-    clickhouse: true
+    clickhouse: true,
+    datadog: true
   };
 
   // Show message
@@ -51,7 +53,7 @@
     // Load user-specific mappings from storage
     chrome.storage.sync.get(['tenantMappings', 'siteSettings'], (result) => {
       userMappings = result.tenantMappings || {};
-      siteSettings = result.siteSettings || { temporal: true, clickhouse: true };
+      siteSettings = result.siteSettings || { temporal: true, clickhouse: true, datadog: true };
       
       // Merge bundled and user mappings (user takes precedence)
       tenantMappings = { ...bundledMappings, ...userMappings };
@@ -66,6 +68,7 @@
       // Update UI
       temporalEnabled.checked = siteSettings.temporal !== false;
       clickhouseEnabled.checked = siteSettings.clickhouse !== false;
+      datadogEnabled.checked = siteSettings.datadog !== false;
       
       renderMappings();
       updateStats();
@@ -392,6 +395,11 @@
   
   clickhouseEnabled.addEventListener('change', (e) => {
     siteSettings.clickhouse = e.target.checked;
+    saveSiteSettings();
+  });
+  
+  datadogEnabled.addEventListener('change', (e) => {
+    siteSettings.datadog = e.target.checked;
     saveSiteSettings();
   });
 

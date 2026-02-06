@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Tenant Name Mapper",
   "version": "2.0.0",
-  "description": "Adds tenant names to Temporal Cloud workflows and ClickHouse Cloud databases",
+  "description": "Adds tenant names to Temporal Cloud workflows, ClickHouse Cloud databases, and Datadog logs",
   "permissions": ["storage"],
   "content_scripts": [
     {
@@ -16,6 +16,12 @@
       "js": ["shared.js", "content-clickhouse.js"],
       "css": ["styles-clickhouse.css"],
       "run_at": "document_end"
+    },
+    {
+      "matches": ["https://app.datadoghq.com/*"],
+      "js": ["shared.js", "content-datadog.js"],
+      "css": ["styles-datadog.css"],
+      "run_at": "document_end"
     }
   ],
   "options_page": "options.html",
@@ -27,7 +33,7 @@
   "web_accessible_resources": [
     {
       "resources": ["tenant-mappings.json"],
-      "matches": ["https://cloud.temporal.io/*", "https://console.clickhouse.cloud/*"]
+      "matches": ["https://cloud.temporal.io/*", "https://console.clickhouse.cloud/*", "https://app.datadoghq.com/*"]
     }
   ]
 }
