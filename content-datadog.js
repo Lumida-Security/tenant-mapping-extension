@@ -44,13 +44,28 @@
       const keyText = keyCell.textContent?.trim();
       if (keyText !== 'accountId') return;
       
-      // Skip if already processed
-      if (valueCell.hasAttribute('data-tenant-processed')) return;
+      // Get the value text, excluding any existing tenant label
+      const existingLabel = valueCell.querySelector('.tenant-name-label');
+      let valueText = valueCell.textContent?.trim();
+      if (existingLabel) {
+        valueText = valueText.replace(existingLabel.textContent, '').trim();
+      }
       
-      // Get the value and validate it's a UUID
-      const valueText = valueCell.textContent?.trim();
+      // Check if the value has changed since we last processed it
+      const previousValue = valueCell.getAttribute('data-tenant-processed-value');
+      if (previousValue === valueText) {
+        // Same value, already processed correctly
+        return;
+      }
+      
+      // Value changed or new - remove any existing label first
+      if (existingLabel) {
+        existingLabel.remove();
+      }
+      
+      // Validate it's a UUID
       if (!ext.isValidUUID(valueText)) {
-        valueCell.setAttribute('data-tenant-processed', 'true');
+        valueCell.setAttribute('data-tenant-processed-value', valueText);
         return;
       }
       
@@ -59,7 +74,7 @@
       
       // Only add tenant name if we have a mapping (not "Unknown")
       if (tenantName === 'Unknown') {
-        valueCell.setAttribute('data-tenant-processed', 'true');
+        valueCell.setAttribute('data-tenant-processed-value', valueText);
         return;
       }
       
@@ -69,7 +84,7 @@
       label.textContent = tenantName;
       valueCell.appendChild(label);
       
-      valueCell.setAttribute('data-tenant-processed', 'true');
+      valueCell.setAttribute('data-tenant-processed-value', valueText);
       console.log('[Datadog Extension] Added tenant name for accountId:', valueText);
     });
   }
@@ -234,8 +249,8 @@
   // Clear processed markers to allow reprocessing
   function clearProcessedMarkers() {
     // Clear accountId JSON viewer markers
-    document.querySelectorAll('[data-tenant-processed]').forEach(item => {
-      item.removeAttribute('data-tenant-processed');
+    document.querySelectorAll('[data-tenant-processed-value]').forEach(item => {
+      item.removeAttribute('data-tenant-processed-value');
       const labels = item.querySelectorAll('.tenant-name-label');
       labels.forEach(label => label.remove());
     });
@@ -277,8 +292,17 @@
     const observer = new MutationObserver((mutations) => {
       let shouldProcess = false;
       
-      // Check if any new JSON viewer rows or URL elements were added
       for (const mutation of mutations) {
+        // Check for text content changes (characterData)
+        if (mutation.type === 'characterData') {
+          // Check if this is within a JSON viewer row
+          if (mutation.target.parentElement?.closest('.druids_misc_json-viewer_row-layout')) {
+            shouldProcess = true;
+            break;
+          }
+        }
+        
+        // Check for new nodes being added
         if (mutation.addedNodes.length > 0) {
           for (const node of mutation.addedNodes) {
             if (node.nodeType === Node.ELEMENT_NODE) {
@@ -301,6 +325,27 @@
                 break;
               }
             }
+            // Also check for text node changes within JSON viewer
+            if (node.nodeType === Node.TEXT_NODE) {
+              if (node.parentElement?.closest('.druids_misc_json-viewer_row-layout')) {
+                shouldProcess = true;
+                break;
+              }
+            }
+          }
+          if (shouldProcess) break;
+        }
+        
+        // Check for removed nodes (panel content changing)
+        if (mutation.removedNodes.length > 0) {
+          for (const node of mutation.removedNodes) {
+            if (node.nodeType === Node.ELEMENT_NODE) {
+              if (node.classList?.contains('druids_misc_json-viewer_row-layout') ||
+                  node.querySelector?.('.druids_misc_json-viewer_row-layout')) {
+                shouldProcess = true;
+                break;
+              }
+            }
           }
           if (shouldProcess) break;
         }
@@ -312,17 +357,18 @@
           clearTimeout(debounceTimer);
         }
         debounceTimer = setTimeout(() => {
-          console.log('[Datadog Extension] New elements detected');
+          console.log('[Datadog Extension] DOM changes detected, reprocessing');
           processAccountIdRows();
           processUrlElements();
           debounceTimer = null;
-        }, 150);
+        }, 100); // Reduced debounce time for faster response
       }
     });
 
     observer.observe(document.body, {
       childList: true,
-      subtree: true
+      subtree: true,
+      characterData: true // Also observe text content changes
     });
 
     console.log('[Datadog Extension] Set up observer for JSON viewer and URL elements');
@@ -380,8 +426,8 @@
         // Remove any added tenant labels
         document.querySelectorAll('.tenant-name-label').forEach(label => label.remove());
         document.querySelectorAll('.tenant-name-label-url').forEach(label => label.remove());
-        document.querySelectorAll('[data-tenant-processed]').forEach(el => {
-          el.removeAttribute('data-tenant-processed');
+        document.querySelectorAll('[data-tenant-processed-value]').forEach(el => {
+          el.removeAttribute('data-tenant-processed-value');
         });
         document.querySelectorAll('[data-tenant-url-processed]').forEach(el => {
           el.removeAttribute('data-tenant-url-processed');
