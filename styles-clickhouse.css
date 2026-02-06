@@ -1,0 +1,45 @@
+/* ClickHouse Cloud Tenant Name Extension - Styles */
+/* Styles for tenant name labels in database picker dropdown */
+
+/* Tenant name label styling */
+.tenant-name-label {
+  display: inline;
+  margin-left: 4px;
+  font-size: 13px;
+  font-weight: 400;
+  color: #888;
+  font-style: normal;
+}
+
+/* Light theme adjustments */
+@media (prefers-color-scheme: light) {
+  .tenant-name-label {
+    color: #666;
+  }
+}
+
+/* Dark theme adjustments */
+@media (prefers-color-scheme: dark) {
+  .tenant-name-label {
+    color: #999;
+  }
+}
+
+/* Hover state for dropdown items with tenant names */
+[role="option"]:hover .tenant-name-label,
+[data-testid*="select-option"]:hover .tenant-name-label {
+  color: inherit;
+  opacity: 0.8;
+}
+
+/* Make sure tenant labels don't wrap */
+.tenant-name-label {
+  white-space: nowrap;
+}
+
+/* Selected item styling */
+[aria-selected="true"] .tenant-name-label,
+[data-selected="true"] .tenant-name-label {
+  color: inherit;
+  opacity: 0.9;
+}

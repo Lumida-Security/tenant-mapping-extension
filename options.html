@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Temporal Tenant Name - Settings</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', sans-serif;
+      background: #1a1a1a;
+      color: #e0e0e0;
+      padding: 20px;
+      line-height: 1.6;
+    }
+
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+      background: #242424;
+      border-radius: 8px;
+      padding: 30px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+    }
+
+    h1 {
+      color: #fff;
+      margin-bottom: 10px;
+      font-size: 28px;
+    }
+
+    .subtitle {
+      color: #999;
+      margin-bottom: 30px;
+      font-size: 14px;
+    }
+
+    .section {
+      margin-bottom: 30px;
+    }
+
+    .section h2 {
+      color: #fff;
+      font-size: 18px;
+      margin-bottom: 15px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid #333;
+    }
+
+    .form-group {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 15px;
+    }
+
+    .form-group input {
+      flex: 1;
+      padding: 10px 14px;
+      background: #2a2a2a;
+      border: 1px solid #3a3a3a;
+      border-radius: 4px;
+      color: #e0e0e0;
+      font-size: 14px;
+    }
+
+    .form-group input:focus {
+      outline: none;
+      border-color: #4a9eff;
+    }
+
+    .form-group input::placeholder {
+      color: #666;
+    }
+
+    button {
+      padding: 10px 20px;
+      background: #4a9eff;
+      border: none;
+      border-radius: 4px;
+      color: white;
+      font-size: 14px;
+      cursor: pointer;
+      transition: background 0.2s;
+      font-weight: 500;
+    }
+
+    button:hover {
+      background: #3a8eef;
+    }
+
+    button:active {
+      transform: scale(0.98);
+    }
+
+    button.secondary {
+      background: #3a3a3a;
+    }
+
+    button.secondary:hover {
+      background: #4a4a4a;
+    }
+
+    button.danger {
+      background: #e74c3c;
+    }
+
+    button.danger:hover {
+      background: #c0392b;
+    }
+
+    button.small {
+      padding: 6px 12px;
+      font-size: 13px;
+    }
+
+    .mapping-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 15px;
+    }
+
+    .mapping-table th {
+      text-align: left;
+      padding: 12px;
+      background: #2a2a2a;
+      color: #999;
+      font-weight: 500;
+      font-size: 13px;
+      border-bottom: 2px solid #333;
+    }
+
+    .mapping-table td {
+      padding: 12px;
+      border-bottom: 1px solid #2a2a2a;
+      font-size: 14px;
+    }
+
+    .mapping-table tr:hover {
+      background: #2a2a2a;
+    }
+
+    .mapping-table .tenant-id {
+      font-family: 'Courier New', monospace;
+      color: #4a9eff;
+    }
+
+    .mapping-table .actions {
+      text-align: right;
+      white-space: nowrap;
+    }
+
+    .mapping-table .actions button {
+      margin-left: 5px;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 40px 20px;
+      color: #666;
+    }
+
+    .empty-state-icon {
+      font-size: 48px;
+      margin-bottom: 10px;
+    }
+
+    .toolbar {
+      display: flex;
+      gap: 10px;
+      justify-content: flex-end;
+      margin-bottom: 15px;
+    }
+
+    .message {
+      padding: 12px 16px;
+      border-radius: 4px;
+      margin-bottom: 20px;
+      font-size: 14px;
+    }
+
+    .message.success {
+      background: #27ae60;
+      color: white;
+    }
+
+    .message.error {
+      background: #e74c3c;
+      color: white;
+    }
+
+    .message.hidden {
+      display: none;
+    }
+
+    .stats {
+      display: flex;
+      gap: 20px;
+      margin-top: 20px;
+      padding: 15px;
+      background: #2a2a2a;
+      border-radius: 4px;
+    }
+
+    .stat-item {
+      flex: 1;
+    }
+
+    .stat-label {
+      color: #999;
+      font-size: 12px;
+      margin-bottom: 5px;
+    }
+
+    .stat-value {
+      color: #fff;
+      font-size: 24px;
+      font-weight: 600;
+    }
+
+    .site-toggles {
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+      padding: 15px;
+      background: #2a2a2a;
+      border-radius: 4px;
+    }
+
+    .site-toggle {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px;
+      background: #242424;
+      border-radius: 4px;
+      border: 1px solid #3a3a3a;
+    }
+
+    .toggle-label {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      cursor: pointer;
+      flex: 1;
+    }
+
+    .toggle-label input[type="checkbox"] {
+      display: none;
+    }
+
+    .toggle-switch {
+      position: relative;
+      width: 44px;
+      height: 24px;
+      background: #3a3a3a;
+      border-radius: 12px;
+      transition: background 0.2s;
+    }
+
+    .toggle-switch::after {
+      content: '';
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 20px;
+      height: 20px;
+      background: #666;
+      border-radius: 50%;
+      transition: all 0.2s;
+    }
+
+    .toggle-label input[type="checkbox"]:checked + .toggle-switch {
+      background: #4a9eff;
+    }
+
+    .toggle-label input[type="checkbox"]:checked + .toggle-switch::after {
+      left: 22px;
+      background: #fff;
+    }
+
+    .toggle-text {
+      font-size: 15px;
+      font-weight: 500;
+      color: #e0e0e0;
+    }
+
+    .site-url {
+      font-size: 13px;
+      color: #888;
+      font-family: 'Courier New', monospace;
+    }
+
+    .source-badge {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 3px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .source-badge.bundled {
+      background: #2a5f8f;
+      color: #a8d5ff;
+    }
+
+    .source-badge.user {
+      background: #2a5f3f;
+      color: #a8ffc5;
+    }
+
+    .source-badge.override {
+      background: #8f6f2a;
+      color: #ffd5a8;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Tenant Name Mapper</h1>
+    <p class="subtitle">Configure tenant ID to name mappings for Temporal Cloud and ClickHouse Cloud</p>
+
+    <div id="message" class="message hidden"></div>
+
+    <div class="section">
+      <h2>Enabled Sites</h2>
+      <div class="site-toggles">
+        <div class="site-toggle">
+          <label class="toggle-label">
+            <input type="checkbox" id="temporalEnabled" checked>
+            <span class="toggle-switch"></span>
+            <span class="toggle-text">Temporal Cloud</span>
+          </label>
+          <span class="site-url">cloud.temporal.io</span>
+        </div>
+        <div class="site-toggle">
+          <label class="toggle-label">
+            <input type="checkbox" id="clickhouseEnabled" checked>
+            <span class="toggle-switch"></span>
+            <span class="toggle-text">ClickHouse Cloud</span>
+          </label>
+          <span class="site-url">console.clickhouse.cloud</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>Add New Mapping</h2>
+      <div class="form-group">
+        <input type="text" id="newTenantId" placeholder="Tenant ID (e.g., 0197cb9b-86b6-7173-8d49-440f0943a662)" />
+        <input type="text" id="newTenantName" placeholder="Tenant Name (e.g., Customer A)" />
+        <button id="addBtn">Add Mapping</button>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>Current Mappings</h2>
+      <div class="toolbar">
+        <button id="importBtn" class="secondary small">Import JSON</button>
+        <button id="exportBtn" class="secondary small">Export JSON</button>
+        <button id="clearAllBtn" class="danger small">Clear All</button>
+      </div>
+      <div id="mappingsContainer"></div>
+    </div>
+
+    <div class="stats">
+      <div class="stat-item">
+        <div class="stat-label">Total Mappings</div>
+        <div class="stat-value" id="totalMappings">0</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-label">Storage Used</div>
+        <div class="stat-value" id="storageUsed">0%</div>
+      </div>
+    </div>
+  </div>
+
+  <input type="file" id="importFile" accept=".json,application/json" style="display: none;" />
+
+  <script src="options.js"></script>
+</body>
+</html>

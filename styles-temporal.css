@@ -1,0 +1,86 @@
+/* Temporal Tenant Name Extension - Styles */
+/* Matches Temporal Cloud table styling in both light and dark modes */
+
+/* Light mode (default) - Tenant Name header styling */
+.tenant-name-header {
+  padding: 1px 8px;
+  font-size: 14px;
+  font-weight: 500;
+  color: rgb(20, 20, 20);
+  background-color: transparent;
+  border-bottom: 1px solid rgb(174, 190, 217);
+  text-align: left;
+  vertical-align: middle;
+  white-space: nowrap;
+  box-sizing: border-box;
+}
+
+/* Light mode (default) - Tenant Name cell styling */
+.tenant-name-cell {
+  padding: 1px 8px;
+  font-size: 14px;
+  font-weight: 400;
+  color: rgb(20, 20, 20);
+  background-color: transparent;
+  border-bottom: 0px solid rgb(20, 20, 20);
+  vertical-align: middle;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 200px;
+  box-sizing: border-box;
+}
+
+/* Dark mode - Override colors when data-theme="dark" */
+[data-theme="dark"] .tenant-name-header {
+  color: rgb(248, 250, 252);
+  border-bottom-color: rgb(39, 56, 96);
+}
+
+[data-theme="dark"] .tenant-name-cell {
+  color: rgb(248, 250, 252);
+  border-bottom-color: rgb(124, 143, 177);
+}
+
+/* Inherit hover behavior from table rows */
+tr:hover .tenant-name-cell {
+  background-color: inherit;
+}
+
+/* Style for "Unknown" tenant names - slightly muted in both themes */
+.tenant-name-cell:empty::before,
+.tenant-name-cell[data-tenant-id=""]::before {
+  content: "Unknown";
+  font-style: italic;
+}
+
+/* Light mode "Unknown" color */
+.tenant-name-cell:empty::before,
+.tenant-name-cell[data-tenant-id=""]::before {
+  color: rgb(107, 114, 128);
+}
+
+/* Dark mode "Unknown" color */
+[data-theme="dark"] .tenant-name-cell:empty::before,
+[data-theme="dark"] .tenant-name-cell[data-tenant-id=""]::before {
+  color: rgb(156, 163, 175);
+}
+
+/* Ensure proper column width */
+table.holocene-table .tenant-name-header {
+  min-width: 120px;
+  max-width: 200px;
+}
+
+table.holocene-table .tenant-name-cell {
+  min-width: 120px;
+  max-width: 200px;
+}
+
+/* Responsive adjustments */
+@media (max-width: 1200px) {
+  .tenant-name-header,
+  .tenant-name-cell {
+    max-width: 150px;
+  }
+}

@@ -1,0 +1,12 @@
+# Playwright MCP logs
+.playwright-mcp/
+
+# macOS
+.DS_Store
+
+# Editor directories
+.vscode/
+.idea/
+
+# Node modules (if added later)
+node_modules/

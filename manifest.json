@@ -1,0 +1,33 @@
+{
+  "manifest_version": 3,
+  "name": "Tenant Name Mapper",
+  "version": "2.0.0",
+  "description": "Adds tenant names to Temporal Cloud workflows and ClickHouse Cloud databases",
+  "permissions": ["storage"],
+  "content_scripts": [
+    {
+      "matches": ["https://cloud.temporal.io/namespaces/*/workflows*"],
+      "js": ["shared.js", "content-temporal.js"],
+      "css": ["styles-temporal.css"],
+      "run_at": "document_end"
+    },
+    {
+      "matches": ["https://console.clickhouse.cloud/*"],
+      "js": ["shared.js", "content-clickhouse.js"],
+      "css": ["styles-clickhouse.css"],
+      "run_at": "document_end"
+    }
+  ],
+  "options_page": "options.html",
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["tenant-mappings.json"],
+      "matches": ["https://cloud.temporal.io/*", "https://console.clickhouse.cloud/*"]
+    }
+  ]
+}
