@@ -4,20 +4,19 @@
 (async function() {
   'use strict';
 
-  // Wait for shared utilities to be available (with retry)
-  async function waitForSharedUtilities(maxAttempts = 10, interval = 100) {
-    for (let i = 0; i < maxAttempts; i++) {
-      if (window.TenantNameExtension) {
-        return window.TenantNameExtension;
-      }
-      await new Promise(resolve => setTimeout(resolve, interval));
-    }
-    return null;
-  }
+  // Constants
+  const SHARED_UTILS_MAX_ATTEMPTS = 50;
+  const SHARED_UTILS_INTERVAL = 100;
+  const RETRY_MAX = 5;
+  const RETRY_INTERVAL = 500;
+  const DEBOUNCE_DELAY = 150;
 
-  const ext = await waitForSharedUtilities();
-  if (!ext) {
-    console.error('[ClickHouse Extension] Shared utilities not loaded after retries');
+  // Wait for shared utilities to be available
+  let ext;
+  try {
+    ext = await window.TenantNameExtension.waitForReady(SHARED_UTILS_MAX_ATTEMPTS, SHARED_UTILS_INTERVAL);
+  } catch (error) {
+    console.error('[ClickHouse Extension] Shared utilities not loaded after retries:', error);
     return;
   }
 
@@ -84,6 +83,12 @@
     allElements.forEach(element => {
       // Skip if already processed
       if (element.hasAttribute('data-tenant-processed')) {
+        return;
+      }
+      
+      // Early bailout: skip elements with many children to reduce unnecessary processing
+      // This optimization reduces processing overhead on large container elements
+      if (element.childElementCount > 5) {
         return;
       }
       
@@ -164,7 +169,7 @@
           console.log('[ClickHouse Extension] New database elements detected');
           processAllDatabaseElements();
           debounceTimer = null;
-        }, 150);
+        }, DEBOUNCE_DELAY);
       }
     });
 
@@ -180,30 +185,15 @@
   async function initExtension() {
     console.log('[ClickHouse Extension] Initializing...');
 
-    // Check if extension context is still valid
-    if (!ext.isContextValid()) {
-      console.log('[ClickHouse Extension] Extension context invalidated, skipping initialization');
+    const result = await ext.initSite('clickhouse');
+    if (!result.ok) {
+      if (result.disabled) {
+        console.log('[ClickHouse Extension] ClickHouse Cloud is disabled in settings');
+      } else {
+        console.error('[ClickHouse Extension] Failed to initialize:', result.error);
+      }
       return;
     }
-
-    // Check if ClickHouse Cloud is enabled in settings
-    let settings;
-    try {
-      settings = await chrome.storage.sync.get(['siteSettings']);
-    } catch (error) {
-      console.error('[ClickHouse Extension] Error accessing storage (context may be invalidated):', error);
-      return;
-    }
-    
-    const siteSettings = settings.siteSettings || { temporal: true, clickhouse: true };
-    
-    if (siteSettings.clickhouse === false) {
-      console.log('[ClickHouse Extension] ClickHouse Cloud is disabled in settings');
-      return;
-    }
-
-    // Load tenant mappings
-    await ext.loadTenantMappings();
 
     // Try to process any existing database elements
     processDropdown();
@@ -217,45 +207,34 @@
     // For SPAs: retry processing a few times during initial load
     // This catches elements that render after the initial scan
     let retryCount = 0;
-    const maxRetries = 5;
     const retryInterval = setInterval(() => {
       retryCount++;
       processAllDatabaseElements();
-      if (retryCount >= maxRetries) {
+      if (retryCount >= RETRY_MAX) {
         clearInterval(retryInterval);
         console.log('[ClickHouse Extension] Initial retry scans complete');
       }
-    }, 500);
+    }, RETRY_INTERVAL);
 
     console.log('[ClickHouse Extension] Initialization complete');
   }
 
   // Listen for site settings changes
-  try {
-    chrome.storage.onChanged.addListener((changes, area) => {
-      if (!ext.isContextValid()) {
-        console.log('[ClickHouse Extension] Extension context invalidated, ignoring storage change');
-        return;
-      }
-      
-      if (area === 'sync' && changes.siteSettings) {
-        const newSettings = changes.siteSettings.newValue || { temporal: true, clickhouse: true };
-        if (newSettings.clickhouse === false) {
-          console.log('[ClickHouse Extension] Disabled via settings, cleaning up');
-          // Remove any added tenant labels
-          document.querySelectorAll('.tenant-name-label').forEach(label => label.remove());
-          document.querySelectorAll('[data-tenant-processed]').forEach(el => {
-            el.removeAttribute('data-tenant-processed');
-          });
-        } else {
-          console.log('[ClickHouse Extension] Enabled via settings, reinitializing');
-          initExtension();
-        }
-      }
-    });
-  } catch (error) {
-    console.error('[ClickHouse Extension] Error setting up storage listener:', error);
-  }
+  ext.setupSiteSettingsListener('clickhouse', {
+    onDisabled: () => {
+      console.log('[ClickHouse Extension] Disabled via settings, cleaning up');
+      // Remove any added tenant labels
+      document.querySelectorAll('.tenant-name-label').forEach(label => label.remove());
+      // Clear processed markers
+      document.querySelectorAll('[data-tenant-processed]').forEach(el => {
+        el.removeAttribute('data-tenant-processed');
+      });
+    },
+    onEnabled: () => {
+      console.log('[ClickHouse Extension] Enabled via settings, reinitializing');
+      initExtension();
+    }
+  });
 
   // Start the extension
   if (document.readyState === 'loading') {

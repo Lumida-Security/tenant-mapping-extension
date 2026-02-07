@@ -315,6 +315,9 @@
   newTenantNameInput.addEventListener('keypress', (e) => {
     if (e.key === 'Enter') handleAdd();
   });
+  newTenantIdInput.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') handleAdd();
+  });
   clearAllBtn.addEventListener('click', handleClearAll);
   
   // Site toggle listeners

@@ -4,20 +4,17 @@
 (async function() {
   'use strict';
 
-  // Wait for shared utilities to be available (with retry)
-  async function waitForSharedUtilities(maxAttempts = 10, interval = 100) {
-    for (let i = 0; i < maxAttempts; i++) {
-      if (window.TenantNameExtension) {
-        return window.TenantNameExtension;
-      }
-      await new Promise(resolve => setTimeout(resolve, interval));
-    }
-    return null;
-  }
+  // Constants
+  const SHARED_UTILS_MAX_ATTEMPTS = 50;
+  const SHARED_UTILS_INTERVAL = 100;
+  const SPA_NAVIGATION_DELAY = 500;
 
-  const ext = await waitForSharedUtilities();
-  if (!ext) {
-    console.error('[Temporal Extension] Shared utilities not loaded after retries');
+  // Wait for shared utilities to be available
+  let ext;
+  try {
+    ext = await window.TenantNameExtension.waitForReady(SHARED_UTILS_MAX_ATTEMPTS, SHARED_UTILS_INTERVAL);
+  } catch (error) {
+    console.error('[Temporal Extension] Shared utilities not loaded after retries:', error);
     return;
   }
 
@@ -187,30 +184,16 @@
   async function initExtension() {
     console.log('[Temporal Extension] Initializing...');
 
-    // Check if extension context is still valid
-    if (!ext.isContextValid()) {
-      console.log('[Temporal Extension] Extension context invalidated, skipping initialization');
+    // Use shared initSite utility
+    const result = await ext.initSite('temporal');
+    if (!result.ok) {
+      if (result.disabled) {
+        console.log('[Temporal Extension] Temporal Cloud is disabled in settings');
+      } else {
+        console.error('[Temporal Extension] Failed to initialize:', result.error || 'Unknown error');
+      }
       return false;
     }
-
-    // Check if Temporal Cloud is enabled in settings
-    let settings;
-    try {
-      settings = await chrome.storage.sync.get(['siteSettings']);
-    } catch (error) {
-      console.error('[Temporal Extension] Error accessing storage (context may be invalidated):', error);
-      return false;
-    }
-    
-    const siteSettings = settings.siteSettings || { temporal: true, clickhouse: true };
-    
-    if (siteSettings.temporal === false) {
-      console.log('[Temporal Extension] Temporal Cloud is disabled in settings');
-      return false;
-    }
-
-    // Load tenant mappings first
-    await ext.loadTenantMappings();
 
     // Find the table
     const table = document.querySelector('table.holocene-table');
@@ -244,7 +227,12 @@
       const table = document.querySelector('table.holocene-table');
       if (table) {
         console.log('[Temporal Extension] Table detected');
-        initExtension();
+        initExtension().then(success => {
+          if (success) {
+            // Disconnect observer after successful initialization
+            bodyObserver.disconnect();
+          }
+        });
       }
     });
 
@@ -268,7 +256,7 @@
         // Wait a bit for the new page to render
         setTimeout(() => {
           initExtension();
-        }, 500);
+        }, SPA_NAVIGATION_DELAY);
       }
     });
 
@@ -281,34 +269,23 @@
   // Set up storage change listener
   ext.setupStorageListener(handleMappingsUpdate);
 
-  // Also listen for site settings changes
-  try {
-    chrome.storage.onChanged.addListener((changes, area) => {
-      if (!ext.isContextValid()) {
-        console.log('[Temporal Extension] Extension context invalidated, ignoring storage change');
-        return;
+  // Set up site settings listener
+  ext.setupSiteSettingsListener('temporal', {
+    onDisabled: () => {
+      console.log('[Temporal Extension] Disabled via settings, stopping');
+      // Remove any added columns
+      const table = document.querySelector('table.holocene-table');
+      if (table) {
+        // Remove tenant name cells and header
+        table.querySelectorAll('.tenant-name-cell').forEach(cell => cell.remove());
+        table.querySelectorAll('.tenant-name-header').forEach(header => header.remove());
       }
-      
-      if (area === 'sync' && changes.siteSettings) {
-        const newSettings = changes.siteSettings.newValue || { temporal: true, clickhouse: true };
-        if (newSettings.temporal === false) {
-          console.log('[Temporal Extension] Disabled via settings, stopping');
-          // Remove any added columns
-          const table = document.querySelector('table.holocene-table');
-          if (table) {
-            // Remove tenant name cells and header
-            table.querySelectorAll('.tenant-name-cell').forEach(cell => cell.remove());
-            table.querySelectorAll('.tenant-name-header').forEach(header => header.remove());
-          }
-        } else {
-          console.log('[Temporal Extension] Enabled via settings, reinitializing');
-          initExtension();
-        }
-      }
-    });
-  } catch (error) {
-    console.error('[Temporal Extension] Error setting up storage listener:', error);
-  }
+    },
+    onEnabled: () => {
+      console.log('[Temporal Extension] Enabled via settings, reinitializing');
+      initExtension();
+    }
+  });
 
   // Start the extension
   if (document.readyState === 'loading') {

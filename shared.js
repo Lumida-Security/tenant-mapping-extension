@@ -148,6 +148,151 @@
     return tenantMappings;
   }
 
+  /**
+   * Wait for TenantNameExtension to be ready
+   * Returns a Promise that resolves to the TenantNameExtension object once it's ready.
+   * Resolves immediately if already loaded, or waits with retries.
+   * @param {number} maxRetries - Maximum number of retry attempts (default: 50)
+   * @param {number} retryDelay - Delay between retries in milliseconds (default: 100)
+   * @returns {Promise<Object>} Promise resolving to TenantNameExtension object
+   */
+  function waitForReady(maxRetries = 50, retryDelay = 100) {
+    return new Promise((resolve, reject) => {
+      // Check if already ready
+      if (window.TenantNameExtension && 
+          typeof window.TenantNameExtension.loadTenantMappings === 'function') {
+        resolve(window.TenantNameExtension);
+        return;
+      }
+
+      // Wait with retries
+      let attempts = 0;
+      const checkReady = () => {
+        attempts++;
+        
+        if (window.TenantNameExtension && 
+            typeof window.TenantNameExtension.loadTenantMappings === 'function') {
+          resolve(window.TenantNameExtension);
+          return;
+        }
+
+        if (attempts >= maxRetries) {
+          reject(new Error('TenantNameExtension failed to load after maximum retries'));
+          return;
+        }
+
+        setTimeout(checkReady, retryDelay);
+      };
+
+      checkReady();
+    });
+  }
+
+  /**
+   * Initialize a site with tenant mappings
+   * Checks site settings and loads tenant mappings if enabled.
+   * @param {string} siteKey - The site key (e.g., 'temporal', 'clickhouse', 'datadog')
+   * @returns {Promise<Object>} Result object with {ok: boolean, mappings?: Object, disabled?: boolean, error?: string}
+   */
+  async function initSite(siteKey) {
+    try {
+      // Check if extension context is valid
+      if (!isContextValid()) {
+        return { ok: false, error: 'Extension context invalidated' };
+      }
+
+      // Read siteSettings from chrome.storage.sync
+      const siteSettings = await new Promise((resolve) => {
+        try {
+          if (!isContextValid()) {
+            resolve({});
+            return;
+          }
+          chrome.storage.sync.get(['siteSettings'], (result) => {
+            if (chrome.runtime.lastError) {
+              console.error('[Tenant Extension] Error loading site settings:', chrome.runtime.lastError);
+              resolve({});
+              return;
+            }
+            resolve(result.siteSettings || {});
+          });
+        } catch (error) {
+          console.error('[Tenant Extension] Exception loading site settings:', error);
+          resolve({});
+        }
+      });
+
+      // Use defaults if siteSettings is empty
+      const defaults = { temporal: true, clickhouse: true, datadog: true };
+      const settings = Object.keys(siteSettings).length > 0 ? siteSettings : defaults;
+
+      // Check if site is disabled
+      if (settings[siteKey] === false) {
+        return { ok: false, disabled: true };
+      }
+
+      // Load tenant mappings
+      const mappings = await loadTenantMappings();
+
+      return { ok: true, mappings };
+    } catch (error) {
+      console.error('[Tenant Extension] Error initializing site:', error);
+      return { ok: false, error: error.message || 'Unknown error' };
+    }
+  }
+
+  /**
+   * Set up a listener for site settings changes
+   * Monitors chrome.storage.onChanged for siteSettings and calls appropriate callbacks.
+   * @param {string} siteKey - The site key to monitor (e.g., 'temporal', 'clickhouse', 'datadog')
+   * @param {Object} callbacks - Callback functions {onDisabled?: Function, onEnabled?: Function}
+   */
+  function setupSiteSettingsListener(siteKey, callbacks) {
+    try {
+      if (!isContextValid()) {
+        console.warn('[Tenant Extension] Extension context invalidated, cannot setup site settings listener');
+        return;
+      }
+
+      chrome.storage.onChanged.addListener(async (changes, area) => {
+        // Check if context is still valid before processing changes
+        if (!isContextValid()) {
+          console.log('[Tenant Extension] Extension context invalidated, ignoring site settings change');
+          return;
+        }
+
+        // Only process sync area changes for siteSettings
+        if (area === 'sync' && changes.siteSettings) {
+          try {
+            const newSettings = changes.siteSettings.newValue || {};
+            const oldSettings = changes.siteSettings.oldValue || {};
+            
+            // Check if the site key changed state
+            const wasEnabled = oldSettings[siteKey] !== false;
+            const isEnabled = newSettings[siteKey] !== false;
+
+            // Site was disabled
+            if (wasEnabled && !isEnabled) {
+              if (callbacks.onDisabled && typeof callbacks.onDisabled === 'function') {
+                callbacks.onDisabled();
+              }
+            }
+            // Site was enabled
+            else if (!wasEnabled && isEnabled) {
+              if (callbacks.onEnabled && typeof callbacks.onEnabled === 'function') {
+                callbacks.onEnabled();
+              }
+            }
+          } catch (error) {
+            console.error('[Tenant Extension] Error processing site settings change:', error);
+          }
+        }
+      });
+    } catch (error) {
+      console.error('[Tenant Extension] Error setting up site settings listener:', error);
+    }
+  }
+
   // Export utilities to global namespace
   window.TenantNameExtension = {
     loadTenantMappings,
@@ -157,7 +302,10 @@
     setupStorageListener,
     getCachedMappings,
     isContextValid,
-    UUID_PATTERN
+    UUID_PATTERN,
+    waitForReady,
+    initSite,
+    setupSiteSettingsListener
   };
 
   console.log('[Tenant Extension] Shared utilities loaded');

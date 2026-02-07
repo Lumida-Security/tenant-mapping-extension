@@ -4,20 +4,19 @@
 (async function() {
   'use strict';
 
-  // Wait for shared utilities to be available (with retry)
-  async function waitForSharedUtilities(maxAttempts = 10, interval = 100) {
-    for (let i = 0; i < maxAttempts; i++) {
-      if (window.TenantNameExtension) {
-        return window.TenantNameExtension;
-      }
-      await new Promise(resolve => setTimeout(resolve, interval));
-    }
-    return null;
-  }
+  // Constants
+  const SHARED_UTILS_MAX_ATTEMPTS = 50;
+  const SHARED_UTILS_INTERVAL = 100;
+  const RETRY_MAX = 5;
+  const RETRY_INTERVAL = 500;
+  const DEBOUNCE_DELAY = 100;
 
-  const ext = await waitForSharedUtilities();
-  if (!ext) {
-    console.error('[Datadog Extension] Shared utilities not loaded after retries');
+  // Wait for shared utilities to be available
+  let ext;
+  try {
+    ext = await window.TenantNameExtension.waitForReady(SHARED_UTILS_MAX_ATTEMPTS, SHARED_UTILS_INTERVAL);
+  } catch (error) {
+    console.error('[Datadog Extension] Shared utilities not loaded after retries:', error);
     return;
   }
 
@@ -361,7 +360,7 @@
           processAccountIdRows();
           processUrlElements();
           debounceTimer = null;
-        }, 100); // Reduced debounce time for faster response
+        }, DEBOUNCE_DELAY);
       }
     });
 
@@ -374,44 +373,19 @@
     console.log('[Datadog Extension] Set up observer for JSON viewer and URL elements');
   }
 
-  // Check if extension context is still valid
-  function isContextValid() {
-    try {
-      // Try to access chrome.runtime.id - this will throw if context is invalidated
-      return chrome.runtime?.id !== undefined;
-    } catch (error) {
-      return false;
-    }
-  }
-
   // Initialize the extension
   async function initExtension() {
     console.log('[Datadog Extension] Initializing...');
 
-    // Check if extension context is still valid
-    if (!isContextValid()) {
-      console.log('[Datadog Extension] Extension context invalidated, skipping initialization');
+    const result = await ext.initSite('datadog');
+    if (!result.ok) {
+      if (result.disabled) {
+        console.log('[Datadog Extension] Datadog is disabled in settings');
+      } else {
+        console.error('[Datadog Extension] Failed to initialize:', result.error || 'Unknown error');
+      }
       return;
     }
-
-    // Check if Datadog is enabled in settings
-    let settings;
-    try {
-      settings = await chrome.storage.sync.get(['siteSettings']);
-    } catch (error) {
-      console.error('[Datadog Extension] Error accessing storage (context may be invalidated):', error);
-      return;
-    }
-    
-    const siteSettings = settings.siteSettings || { temporal: true, clickhouse: true, datadog: true };
-    
-    if (siteSettings.datadog === false) {
-      console.log('[Datadog Extension] Datadog is disabled in settings');
-      return;
-    }
-
-    // Load tenant mappings
-    await ext.loadTenantMappings();
 
     // Try to process any existing accountId rows and URL elements
     processAccountIdRows();
@@ -426,56 +400,32 @@
     // For SPAs: retry processing a few times during initial load
     // This catches elements that render after the initial scan
     let retryCount = 0;
-    const maxRetries = 5;
     const retryInterval = setInterval(() => {
       retryCount++;
       processAccountIdRows();
       processUrlElements();
-      if (retryCount >= maxRetries) {
+      if (retryCount >= RETRY_MAX) {
         clearInterval(retryInterval);
         console.log('[Datadog Extension] Initial retry scans complete');
       }
-    }, 500);
+    }, RETRY_INTERVAL);
 
     console.log('[Datadog Extension] Initialization complete');
   }
 
-  // Listen for site settings changes
-  try {
-    chrome.storage.onChanged.addListener((changes, area) => {
-      if (!isContextValid()) {
-        console.log('[Datadog Extension] Extension context invalidated, ignoring storage change');
-        return;
-      }
-      
-      if (area === 'sync' && changes.siteSettings) {
-        const newSettings = changes.siteSettings.newValue || { temporal: true, clickhouse: true, datadog: true };
-        if (newSettings.datadog === false) {
-          console.log('[Datadog Extension] Disabled via settings, cleaning up');
-          // Remove any added tenant labels
-          document.querySelectorAll('.tenant-name-label').forEach(label => label.remove());
-          document.querySelectorAll('.tenant-name-label-url').forEach(label => label.remove());
-          document.querySelectorAll('[data-tenant-processed-value]').forEach(el => {
-            el.removeAttribute('data-tenant-processed-value');
-          });
-          document.querySelectorAll('[data-tenant-url-processed]').forEach(el => {
-            el.removeAttribute('data-tenant-url-processed');
-          });
-          document.querySelectorAll('[data-tenant-url-path-processed]').forEach(el => {
-            el.removeAttribute('data-tenant-url-path-processed');
-          });
-          document.querySelectorAll('[data-tenant-url-kv-processed]').forEach(el => {
-            el.removeAttribute('data-tenant-url-kv-processed');
-          });
-        } else {
-          console.log('[Datadog Extension] Enabled via settings, reinitializing');
-          initExtension();
-        }
-      }
-    });
-  } catch (error) {
-    console.error('[Datadog Extension] Error setting up storage listener:', error);
+  // Define callbacks for site settings changes
+  function onDisabled() {
+    console.log('[Datadog Extension] Disabled via settings, cleaning up');
+    clearProcessedMarkers();
   }
+
+  function onEnabled() {
+    console.log('[Datadog Extension] Enabled via settings, reinitializing');
+    initExtension();
+  }
+
+  // Set up site settings listener
+  ext.setupSiteSettingsListener('datadog', { onDisabled, onEnabled });
 
   // Start the extension
   if (document.readyState === 'loading') {

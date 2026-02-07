@@ -18,32 +18,9 @@
   transition: all 0.15s ease;
 }
 
-/* Light theme */
-@media (prefers-color-scheme: light) {
-  .tenant-name-label {
-    background-color: #3b82f6;
-    color: #ffffff;
-    border-color: #2563eb;
-  }
-  
-  .tenant-name-label:hover {
-    background-color: #2563eb;
-    border-color: #1d4ed8;
-  }
-}
-
-/* Dark theme */
-@media (prefers-color-scheme: dark) {
-  .tenant-name-label {
-    background-color: #3b82f6;
-    color: #ffffff;
-    border-color: #2563eb;
-  }
-  
-  .tenant-name-label:hover {
-    background-color: #2563eb;
-    border-color: #1d4ed8;
-  }
+.tenant-name-label:hover {
+  background-color: #2563eb;
+  border-color: #1d4ed8;
 }
 
 /* Hover state for JSON viewer rows with tenant names */
@@ -74,32 +51,9 @@
   vertical-align: middle;
 }
 
-/* Light theme for URL labels */
-@media (prefers-color-scheme: light) {
-  .tenant-name-label-url {
-    background-color: #10b981;
-    color: #ffffff;
-    border-color: #059669;
-  }
-  
-  .tenant-name-label-url:hover {
-    background-color: #059669;
-    border-color: #047857;
-  }
-}
-
-/* Dark theme for URL labels */
-@media (prefers-color-scheme: dark) {
-  .tenant-name-label-url {
-    background-color: #10b981;
-    color: #ffffff;
-    border-color: #059669;
-  }
-  
-  .tenant-name-label-url:hover {
-    background-color: #059669;
-    border-color: #047857;
-  }
+.tenant-name-label-url:hover {
+  background-color: #059669;
+  border-color: #047857;
 }
 
 /* Hover state for buttons with URL tenant names */
