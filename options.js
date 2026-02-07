@@ -10,7 +10,6 @@
   const mappingsContainer = document.getElementById('mappingsContainer');
   const messageDiv = document.getElementById('message');
   const totalMappingsSpan = document.getElementById('totalMappings');
-  const storageUsedSpan = document.getElementById('storageUsed');
   const clearAllBtn = document.getElementById('clearAllBtn');
   const temporalEnabled = document.getElementById('temporalEnabled');
   const clickhouseEnabled = document.getElementById('clickhouseEnabled');
@@ -198,13 +197,6 @@
       if (overrideCount > 0) parts.push(`${overrideCount} override${overrideCount > 1 ? 's' : ''}`);
       totalMappingsSpan.textContent = `${totalCount} (${parts.join(' + ')})`;
     }
-
-    // Calculate storage usage (only user mappings count toward storage)
-    chrome.storage.sync.getBytesInUse(['tenantMappings'], (bytes) => {
-      const maxBytes = chrome.storage.sync.QUOTA_BYTES || 102400; // 100KB default
-      const percentage = Math.round((bytes / maxBytes) * 100);
-      storageUsedSpan.textContent = percentage + '%';
-    });
   }
 
   // Add new mapping
