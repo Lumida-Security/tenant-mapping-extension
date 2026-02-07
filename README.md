@@ -12,7 +12,6 @@ A Chrome extension that adds tenant names to Temporal Cloud workflows, ClickHous
 - Enable/disable functionality per site
 - Settings sync across Chrome browsers
 - Supports both Light and Dark themes
-- Import/Export mappings as JSON
 
 ## Installation
 
@@ -94,18 +93,6 @@ A Chrome extension that adds tenant names to Temporal Cloud workflows, ClickHous
 3. Copy any UUID database name
 4. Add it to the extension options with a friendly name
 
-### Example Mappings
-
-Here's an example JSON format for import/export:
-
-```json
-{
-  "0197cb9b-86b6-7173-8d49-440f0943a662": "Customer A",
-  "019b086d-49d5-73a2-b119-88dbdec7a381": "Customer B",
-  "0197cb9a-ae7b-7cb0-85de-c2123b18dbdf": "Internal Testing"
-}
-```
-
 ## Usage
 
 ### Temporal Cloud
@@ -139,16 +126,6 @@ Once configured, the extension automatically:
    - Span Attributes table (url and path cells)
    - JSON viewer panel (accountId keys)
 4. Updates automatically when navigating between traces
-
-## Import/Export
-
-### Export Mappings
-
-Click "Export JSON" in the options page to download your mappings as a JSON file.
-
-### Import Mappings
-
-Click "Import JSON" and select a previously exported JSON file.
 
 ## Theme Support
 

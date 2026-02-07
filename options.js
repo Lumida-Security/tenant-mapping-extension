@@ -11,10 +11,7 @@
   const messageDiv = document.getElementById('message');
   const totalMappingsSpan = document.getElementById('totalMappings');
   const storageUsedSpan = document.getElementById('storageUsed');
-  const importBtn = document.getElementById('importBtn');
-  const exportBtn = document.getElementById('exportBtn');
   const clearAllBtn = document.getElementById('clearAllBtn');
-  const importFile = document.getElementById('importFile');
   const temporalEnabled = document.getElementById('temporalEnabled');
   const clickhouseEnabled = document.getElementById('clickhouseEnabled');
   const datadogEnabled = document.getElementById('datadogEnabled');
@@ -76,16 +73,16 @@
   }
 
   // Save mappings to storage
-  function saveMappings() {
+  function saveMappings(callback) {
     // Only save user mappings, not bundled ones
     chrome.storage.sync.set({ tenantMappings: userMappings }, () => {
       if (chrome.runtime.lastError) {
         showMessage('Error saving mappings: ' + chrome.runtime.lastError.message, 'error');
       } else {
-        showMessage('Mappings saved successfully');
         // Update merged mappings
         tenantMappings = { ...bundledMappings, ...userMappings };
         updateStats();
+        if (callback) callback();
       }
     });
   }
@@ -238,19 +235,20 @@
     // Add or update mapping in user mappings
     const isBundled = bundledMappings.hasOwnProperty(tenantId);
     userMappings[tenantId] = tenantName;
-    saveMappings();
-    renderMappings();
+    
+    saveMappings(() => {
+      renderMappings();
+      // Clear inputs
+      newTenantIdInput.value = '';
+      newTenantNameInput.value = '';
+      newTenantIdInput.focus();
 
-    // Clear inputs
-    newTenantIdInput.value = '';
-    newTenantNameInput.value = '';
-    newTenantIdInput.focus();
-
-    if (isBundled) {
-      showMessage(`Override created: ${tenantName}`);
-    } else {
-      showMessage(`Mapping added: ${tenantName}`);
-    }
+      if (isBundled) {
+        showMessage(`Override created: ${tenantName}`);
+      } else {
+        showMessage(`Mapping added: ${tenantName}`);
+      }
+    });
   }
 
   // Edit mapping
@@ -266,9 +264,10 @@
     const newName = prompt(message, currentName);
     if (newName !== null && newName.trim() !== '') {
       userMappings[tenantId] = newName.trim();
-      saveMappings();
-      renderMappings();
-      showMessage('Mapping updated');
+      saveMappings(() => {
+        renderMappings();
+        showMessage('Mapping updated');
+      });
     }
   }
 
@@ -288,73 +287,14 @@
 
     if (confirm(confirmMessage)) {
       delete userMappings[tenantId];
-      saveMappings();
-      renderMappings();
-      showMessage(isOverride ? 'Override removed' : 'Mapping deleted');
+      saveMappings(() => {
+        renderMappings();
+        showMessage(isOverride ? 'Override removed' : 'Mapping deleted');
+      });
     }
   }
 
-  // Export mappings as JSON
-  function handleExport() {
-    const dataStr = JSON.stringify(tenantMappings, null, 2);
-    const blob = new Blob([dataStr], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `tenant-mappings-${new Date().toISOString().split('T')[0]}.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    showMessage('Mappings exported successfully');
-  }
-
-  // Import mappings from JSON
-  function handleImport() {
-    importFile.click();
-  }
-
-  // Handle file selection for import
-  function handleFileSelect(e) {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      try {
-        const imported = JSON.parse(event.target.result);
-
-        // Validate structure
-        if (typeof imported !== 'object' || Array.isArray(imported)) {
-          throw new Error('Invalid format: expected an object');
-        }
-
-        // Validate each mapping
-        for (const [key, value] of Object.entries(imported)) {
-          if (typeof key !== 'string' || typeof value !== 'string') {
-            throw new Error('Invalid format: keys and values must be strings');
-          }
-        }
-
-        // Ask for confirmation
-        const count = Object.keys(imported).length;
-        if (confirm(`Import ${count} mappings? This will merge with existing user mappings.`)) {
-          userMappings = { ...userMappings, ...imported };
-          saveMappings();
-          renderMappings();
-          showMessage(`Imported ${count} mappings`);
-        }
-      } catch (err) {
-        showMessage('Error importing file: ' + err.message, 'error');
-      }
-    };
-    reader.readAsText(file);
-
-    // Reset file input
-    importFile.value = '';
-  }
-
-  // Clear all mappings
+  // Clear all user mappings
   function handleClearAll() {
     if (Object.keys(userMappings).length === 0) {
       showMessage('No user mappings to clear', 'error');
@@ -364,9 +304,10 @@
     const count = Object.keys(userMappings).length;
     if (confirm(`Delete all ${count} user mappings? This cannot be undone. Bundled mappings will remain.`)) {
       userMappings = {};
-      saveMappings();
-      renderMappings();
-      showMessage('All user mappings cleared');
+      saveMappings(() => {
+        renderMappings();
+        showMessage('All user mappings cleared');
+      });
     }
   }
 
@@ -382,9 +323,6 @@
   newTenantNameInput.addEventListener('keypress', (e) => {
     if (e.key === 'Enter') handleAdd();
   });
-  exportBtn.addEventListener('click', handleExport);
-  importBtn.addEventListener('click', handleImport);
-  importFile.addEventListener('change', handleFileSelect);
   clearAllBtn.addEventListener('click', handleClearAll);
   
   // Site toggle listeners
