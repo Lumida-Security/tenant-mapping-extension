@@ -187,8 +187,21 @@
   async function initExtension() {
     console.log('[Temporal Extension] Initializing...');
 
+    // Check if extension context is still valid
+    if (!ext.isContextValid()) {
+      console.log('[Temporal Extension] Extension context invalidated, skipping initialization');
+      return false;
+    }
+
     // Check if Temporal Cloud is enabled in settings
-    const settings = await chrome.storage.sync.get(['siteSettings']);
+    let settings;
+    try {
+      settings = await chrome.storage.sync.get(['siteSettings']);
+    } catch (error) {
+      console.error('[Temporal Extension] Error accessing storage (context may be invalidated):', error);
+      return false;
+    }
+    
     const siteSettings = settings.siteSettings || { temporal: true, clickhouse: true };
     
     if (siteSettings.temporal === false) {
@@ -269,24 +282,33 @@
   ext.setupStorageListener(handleMappingsUpdate);
 
   // Also listen for site settings changes
-  chrome.storage.onChanged.addListener((changes, area) => {
-    if (area === 'sync' && changes.siteSettings) {
-      const newSettings = changes.siteSettings.newValue || { temporal: true, clickhouse: true };
-      if (newSettings.temporal === false) {
-        console.log('[Temporal Extension] Disabled via settings, stopping');
-        // Remove any added columns
-        const table = document.querySelector('table.holocene-table');
-        if (table) {
-          // Remove tenant name cells and header
-          table.querySelectorAll('.tenant-name-cell').forEach(cell => cell.remove());
-          table.querySelectorAll('.tenant-name-header').forEach(header => header.remove());
-        }
-      } else {
-        console.log('[Temporal Extension] Enabled via settings, reinitializing');
-        initExtension();
+  try {
+    chrome.storage.onChanged.addListener((changes, area) => {
+      if (!ext.isContextValid()) {
+        console.log('[Temporal Extension] Extension context invalidated, ignoring storage change');
+        return;
       }
-    }
-  });
+      
+      if (area === 'sync' && changes.siteSettings) {
+        const newSettings = changes.siteSettings.newValue || { temporal: true, clickhouse: true };
+        if (newSettings.temporal === false) {
+          console.log('[Temporal Extension] Disabled via settings, stopping');
+          // Remove any added columns
+          const table = document.querySelector('table.holocene-table');
+          if (table) {
+            // Remove tenant name cells and header
+            table.querySelectorAll('.tenant-name-cell').forEach(cell => cell.remove());
+            table.querySelectorAll('.tenant-name-header').forEach(header => header.remove());
+          }
+        } else {
+          console.log('[Temporal Extension] Enabled via settings, reinitializing');
+          initExtension();
+        }
+      }
+    });
+  } catch (error) {
+    console.error('[Temporal Extension] Error setting up storage listener:', error);
+  }
 
   // Start the extension
   if (document.readyState === 'loading') {

@@ -374,12 +374,35 @@
     console.log('[Datadog Extension] Set up observer for JSON viewer and URL elements');
   }
 
+  // Check if extension context is still valid
+  function isContextValid() {
+    try {
+      // Try to access chrome.runtime.id - this will throw if context is invalidated
+      return chrome.runtime?.id !== undefined;
+    } catch (error) {
+      return false;
+    }
+  }
+
   // Initialize the extension
   async function initExtension() {
     console.log('[Datadog Extension] Initializing...');
 
+    // Check if extension context is still valid
+    if (!isContextValid()) {
+      console.log('[Datadog Extension] Extension context invalidated, skipping initialization');
+      return;
+    }
+
     // Check if Datadog is enabled in settings
-    const settings = await chrome.storage.sync.get(['siteSettings']);
+    let settings;
+    try {
+      settings = await chrome.storage.sync.get(['siteSettings']);
+    } catch (error) {
+      console.error('[Datadog Extension] Error accessing storage (context may be invalidated):', error);
+      return;
+    }
+    
     const siteSettings = settings.siteSettings || { temporal: true, clickhouse: true, datadog: true };
     
     if (siteSettings.datadog === false) {
@@ -418,32 +441,41 @@
   }
 
   // Listen for site settings changes
-  chrome.storage.onChanged.addListener((changes, area) => {
-    if (area === 'sync' && changes.siteSettings) {
-      const newSettings = changes.siteSettings.newValue || { temporal: true, clickhouse: true, datadog: true };
-      if (newSettings.datadog === false) {
-        console.log('[Datadog Extension] Disabled via settings, cleaning up');
-        // Remove any added tenant labels
-        document.querySelectorAll('.tenant-name-label').forEach(label => label.remove());
-        document.querySelectorAll('.tenant-name-label-url').forEach(label => label.remove());
-        document.querySelectorAll('[data-tenant-processed-value]').forEach(el => {
-          el.removeAttribute('data-tenant-processed-value');
-        });
-        document.querySelectorAll('[data-tenant-url-processed]').forEach(el => {
-          el.removeAttribute('data-tenant-url-processed');
-        });
-        document.querySelectorAll('[data-tenant-url-path-processed]').forEach(el => {
-          el.removeAttribute('data-tenant-url-path-processed');
-        });
-        document.querySelectorAll('[data-tenant-url-kv-processed]').forEach(el => {
-          el.removeAttribute('data-tenant-url-kv-processed');
-        });
-      } else {
-        console.log('[Datadog Extension] Enabled via settings, reinitializing');
-        initExtension();
+  try {
+    chrome.storage.onChanged.addListener((changes, area) => {
+      if (!isContextValid()) {
+        console.log('[Datadog Extension] Extension context invalidated, ignoring storage change');
+        return;
       }
-    }
-  });
+      
+      if (area === 'sync' && changes.siteSettings) {
+        const newSettings = changes.siteSettings.newValue || { temporal: true, clickhouse: true, datadog: true };
+        if (newSettings.datadog === false) {
+          console.log('[Datadog Extension] Disabled via settings, cleaning up');
+          // Remove any added tenant labels
+          document.querySelectorAll('.tenant-name-label').forEach(label => label.remove());
+          document.querySelectorAll('.tenant-name-label-url').forEach(label => label.remove());
+          document.querySelectorAll('[data-tenant-processed-value]').forEach(el => {
+            el.removeAttribute('data-tenant-processed-value');
+          });
+          document.querySelectorAll('[data-tenant-url-processed]').forEach(el => {
+            el.removeAttribute('data-tenant-url-processed');
+          });
+          document.querySelectorAll('[data-tenant-url-path-processed]').forEach(el => {
+            el.removeAttribute('data-tenant-url-path-processed');
+          });
+          document.querySelectorAll('[data-tenant-url-kv-processed]').forEach(el => {
+            el.removeAttribute('data-tenant-url-kv-processed');
+          });
+        } else {
+          console.log('[Datadog Extension] Enabled via settings, reinitializing');
+          initExtension();
+        }
+      }
+    });
+  } catch (error) {
+    console.error('[Datadog Extension] Error setting up storage listener:', error);
+  }
 
   // Start the extension
   if (document.readyState === 'loading') {

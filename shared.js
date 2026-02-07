@@ -14,10 +14,29 @@
   const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
   /**
+   * Check if extension context is still valid
+   * @returns {boolean} True if context is valid
+   */
+  function isContextValid() {
+    try {
+      // Try to access chrome.runtime.id - this will throw if context is invalidated
+      return chrome.runtime?.id !== undefined;
+    } catch (error) {
+      return false;
+    }
+  }
+
+  /**
    * Load tenant mappings from storage
    * @returns {Promise<Object>} Promise resolving to tenant mappings
    */
   async function loadTenantMappings() {
+    // Check if extension context is valid before accessing Chrome APIs
+    if (!isContextValid()) {
+      console.warn('[Tenant Extension] Extension context invalidated, cannot load mappings');
+      return {};
+    }
+
     // 1. Load bundled mappings from repo file
     let bundledMappings = {};
     try {
@@ -34,6 +53,10 @@
     // 2. Load user overrides from Chrome storage
     const userMappings = await new Promise((resolve) => {
       try {
+        if (!isContextValid()) {
+          resolve({});
+          return;
+        }
         chrome.storage.sync.get(['tenantMappings'], (result) => {
           if (chrome.runtime.lastError) {
             console.error('[Tenant Extension] Error loading user mappings:', chrome.runtime.lastError);
@@ -97,6 +120,12 @@
   function setupStorageListener(callback) {
     try {
       chrome.storage.onChanged.addListener(async (changes, area) => {
+        // Check if context is still valid before processing changes
+        if (!isContextValid()) {
+          console.log('[Tenant Extension] Extension context invalidated, ignoring storage change');
+          return;
+        }
+        
         if (area === 'sync' && changes.tenantMappings) {
           console.log('[Tenant Extension] User mappings updated, reloading all mappings');
           // Reload all mappings to ensure bundled + user merge is correct
@@ -127,6 +156,7 @@
     extractTenantIdFromWorkflowId,
     setupStorageListener,
     getCachedMappings,
+    isContextValid,
     UUID_PATTERN
   };
 

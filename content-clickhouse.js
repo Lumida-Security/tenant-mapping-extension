@@ -180,8 +180,21 @@
   async function initExtension() {
     console.log('[ClickHouse Extension] Initializing...');
 
+    // Check if extension context is still valid
+    if (!ext.isContextValid()) {
+      console.log('[ClickHouse Extension] Extension context invalidated, skipping initialization');
+      return;
+    }
+
     // Check if ClickHouse Cloud is enabled in settings
-    const settings = await chrome.storage.sync.get(['siteSettings']);
+    let settings;
+    try {
+      settings = await chrome.storage.sync.get(['siteSettings']);
+    } catch (error) {
+      console.error('[ClickHouse Extension] Error accessing storage (context may be invalidated):', error);
+      return;
+    }
+    
     const siteSettings = settings.siteSettings || { temporal: true, clickhouse: true };
     
     if (siteSettings.clickhouse === false) {
@@ -218,22 +231,31 @@
   }
 
   // Listen for site settings changes
-  chrome.storage.onChanged.addListener((changes, area) => {
-    if (area === 'sync' && changes.siteSettings) {
-      const newSettings = changes.siteSettings.newValue || { temporal: true, clickhouse: true };
-      if (newSettings.clickhouse === false) {
-        console.log('[ClickHouse Extension] Disabled via settings, cleaning up');
-        // Remove any added tenant labels
-        document.querySelectorAll('.tenant-name-label').forEach(label => label.remove());
-        document.querySelectorAll('[data-tenant-processed]').forEach(el => {
-          el.removeAttribute('data-tenant-processed');
-        });
-      } else {
-        console.log('[ClickHouse Extension] Enabled via settings, reinitializing');
-        initExtension();
+  try {
+    chrome.storage.onChanged.addListener((changes, area) => {
+      if (!ext.isContextValid()) {
+        console.log('[ClickHouse Extension] Extension context invalidated, ignoring storage change');
+        return;
       }
-    }
-  });
+      
+      if (area === 'sync' && changes.siteSettings) {
+        const newSettings = changes.siteSettings.newValue || { temporal: true, clickhouse: true };
+        if (newSettings.clickhouse === false) {
+          console.log('[ClickHouse Extension] Disabled via settings, cleaning up');
+          // Remove any added tenant labels
+          document.querySelectorAll('.tenant-name-label').forEach(label => label.remove());
+          document.querySelectorAll('[data-tenant-processed]').forEach(el => {
+            el.removeAttribute('data-tenant-processed');
+          });
+        } else {
+          console.log('[ClickHouse Extension] Enabled via settings, reinitializing');
+          initExtension();
+        }
+      }
+    });
+  } catch (error) {
+    console.error('[ClickHouse Extension] Error setting up storage listener:', error);
+  }
 
   // Start the extension
   if (document.readyState === 'loading') {
