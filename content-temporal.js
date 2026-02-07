@@ -8,6 +8,8 @@
   const SHARED_UTILS_MAX_ATTEMPTS = 50;
   const SHARED_UTILS_INTERVAL = 100;
   const SPA_NAVIGATION_DELAY = 500;
+  const REPROCESS_DEBOUNCE_MS = 150;
+  const TABLE_CHECK_INTERVAL_MS = 300;
 
   // Wait for shared utilities to be available
   let ext;
@@ -18,6 +20,28 @@
     return;
   }
 
+  // Track whether the extension is enabled
+  let extensionEnabled = true;
+
+  // Debounce timer for reprocessing
+  let reprocessTimer = null;
+
+  // Find the Workflow ID column index dynamically by scanning headers
+  function findWorkflowIdColumnIndex(table) {
+    const headers = table.querySelectorAll('thead th');
+    for (let i = 0; i < headers.length; i++) {
+      if (headers[i].textContent.trim() === 'Workflow ID') {
+        return i + 1; // Convert to 1-based nth-child index
+      }
+    }
+    return null;
+  }
+
+  // Check if the table already has our tenant name header
+  function hasTenantHeader(table) {
+    return table.querySelector('.tenant-name-header') !== null;
+  }
+
   // Add tenant name header to the table
   function addTenantNameHeader(table) {
     const thead = table.querySelector('thead');
@@ -26,13 +50,16 @@
     const headerRow = thead.querySelector('tr');
     if (!headerRow) return false;
 
-    // Check if already processed
-    if (headerRow.hasAttribute('data-tenant-header-added')) {
+    // Already has our header
+    if (hasTenantHeader(table)) {
       return true;
     }
 
-    // Get the Workflow ID header (index 3)
-    const workflowIdHeader = headerRow.querySelector('th:nth-child(4)');
+    // Find Workflow ID column dynamically
+    const workflowIdIndex = findWorkflowIdColumnIndex(table);
+    if (!workflowIdIndex) return false;
+
+    const workflowIdHeader = headerRow.querySelector(`th:nth-child(${workflowIdIndex})`);
     if (!workflowIdHeader) return false;
 
     // Create and insert the new header after Workflow ID
@@ -40,29 +67,27 @@
     tenantHeader.textContent = 'Tenant Name';
     tenantHeader.className = 'tenant-name-header';
     
-    // Insert after the Workflow ID header (at index 4)
-    const runIdHeader = headerRow.querySelector('th:nth-child(5)');
-    if (runIdHeader) {
-      headerRow.insertBefore(tenantHeader, runIdHeader);
+    // Insert after the Workflow ID header
+    const nextHeader = headerRow.querySelector(`th:nth-child(${workflowIdIndex + 1})`);
+    if (nextHeader) {
+      headerRow.insertBefore(tenantHeader, nextHeader);
     } else {
       headerRow.appendChild(tenantHeader);
     }
 
-    // Mark as processed
-    headerRow.setAttribute('data-tenant-header-added', 'true');
     console.log('[Temporal Extension] Added tenant name header');
     return true;
   }
 
   // Process a single row to add tenant name cell
-  function processRow(row) {
-    // Check if already processed
-    if (row.hasAttribute('data-tenant-processed')) {
+  function processRow(row, workflowIdIndex) {
+    // Skip if already has a tenant cell
+    if (row.querySelector('.tenant-name-cell')) {
       return;
     }
 
-    // Get the Workflow ID cell (index 3, but in DOM it's 4th child)
-    const workflowIdCell = row.querySelector('td:nth-child(4)');
+    // Get the Workflow ID cell using dynamic index
+    const workflowIdCell = row.querySelector(`td:nth-child(${workflowIdIndex})`);
     if (!workflowIdCell) return;
 
     // Extract the workflow ID from the link text
@@ -81,16 +106,13 @@
     tenantCell.className = 'workflows-summary-table-body-cell tenant-name-cell';
     tenantCell.setAttribute('data-tenant-id', tenantId || '');
 
-    // Insert after the Workflow ID cell (at position 4)
-    const runIdCell = row.querySelector('td:nth-child(5)');
-    if (runIdCell) {
-      row.insertBefore(tenantCell, runIdCell);
+    // Insert after the Workflow ID cell
+    const nextCell = row.querySelector(`td:nth-child(${workflowIdIndex + 1})`);
+    if (nextCell) {
+      row.insertBefore(tenantCell, nextCell);
     } else {
       row.appendChild(tenantCell);
     }
-
-    // Mark as processed
-    row.setAttribute('data-tenant-processed', 'true');
   }
 
   // Process all rows in the table
@@ -98,19 +120,30 @@
     const tbody = table.querySelector('tbody');
     if (!tbody) return;
 
+    // Find Workflow ID column dynamically
+    const workflowIdIndex = findWorkflowIdColumnIndex(table);
+    if (!workflowIdIndex) return;
+
     const rows = tbody.querySelectorAll('tr');
-    rows.forEach(processRow);
-    console.log('[Temporal Extension] Processed', rows.length, 'rows');
+    let processedCount = 0;
+    rows.forEach(row => {
+      if (!row.querySelector('.tenant-name-cell')) {
+        processRow(row, workflowIdIndex);
+        processedCount++;
+      }
+    });
+    if (processedCount > 0) {
+      console.log('[Temporal Extension] Processed', processedCount, 'new rows');
+    }
   }
 
   // Process the table (add header and process rows)
   function processTable(table) {
-    if (!table) return;
+    if (!table || !extensionEnabled) return;
 
     // Add header if not already added
     const headerAdded = addTenantNameHeader(table);
     if (!headerAdded) {
-      console.warn('[Temporal Extension] Failed to add header');
       return;
     }
 
@@ -118,65 +151,30 @@
     processAllRows(table);
   }
 
-  // Set up observer for table body changes (pagination, filters, sorting)
-  function observeTableChanges(table) {
-    const tbody = table.querySelector('tbody');
-    if (!tbody) return;
-
-    // Disconnect existing observer if any
-    if (table._tenantObserver) {
-      table._tenantObserver.disconnect();
+  // Debounced reprocessing - handles rapid Svelte re-renders
+  function scheduleReprocess() {
+    if (reprocessTimer) {
+      clearTimeout(reprocessTimer);
     }
-
-    const observer = new MutationObserver((mutations) => {
-      let shouldProcess = false;
-
-      for (const mutation of mutations) {
-        if (mutation.type === 'childList') {
-          // Check if new rows were added
-          if (mutation.addedNodes.length > 0) {
-            for (const node of mutation.addedNodes) {
-              if (node.tagName === 'TR') {
-                shouldProcess = true;
-                break;
-              }
-            }
-          }
-        }
+    reprocessTimer = setTimeout(() => {
+      reprocessTimer = null;
+      const table = document.querySelector('table.holocene-table');
+      if (table && extensionEnabled) {
+        processTable(table);
       }
-
-      if (shouldProcess) {
-        console.log('[Temporal Extension] Table changed, reprocessing rows');
-        processAllRows(table);
-      }
-    });
-
-    observer.observe(tbody, {
-      childList: true,
-      subtree: false
-    });
-
-    // Store observer on table element
-    table._tenantObserver = observer;
-    console.log('[Temporal Extension] Set up table observer');
+    }, REPROCESS_DEBOUNCE_MS);
   }
 
   // Reprocess table when mappings change
   function handleMappingsUpdate() {
     const table = document.querySelector('table.holocene-table');
     if (table) {
-      // Remove processing markers
-      table.querySelectorAll('[data-tenant-processed]').forEach(row => {
-        row.removeAttribute('data-tenant-processed');
-        // Remove existing tenant cells
-        const tenantCell = row.querySelector('.tenant-name-cell');
-        if (tenantCell) {
-          tenantCell.remove();
-        }
-      });
+      // Remove existing tenant cells so they get recreated with new names
+      table.querySelectorAll('.tenant-name-cell').forEach(cell => cell.remove());
+      table.querySelectorAll('.tenant-name-header').forEach(header => header.remove());
       
       // Reprocess
-      processAllRows(table);
+      processTable(table);
     }
   }
 
@@ -189,11 +187,14 @@
     if (!result.ok) {
       if (result.disabled) {
         console.log('[Temporal Extension] Temporal Cloud is disabled in settings');
+        extensionEnabled = false;
       } else {
         console.error('[Temporal Extension] Failed to initialize:', result.error || 'Unknown error');
       }
       return false;
     }
+
+    extensionEnabled = true;
 
     // Find the table
     const table = document.querySelector('table.holocene-table');
@@ -205,65 +206,55 @@
     // Process the table
     processTable(table);
 
-    // Set up observer for dynamic changes
-    observeTableChanges(table);
-
     console.log('[Temporal Extension] Initialization complete');
     return true;
   }
 
-  // Set up mutation observer to detect when table appears
-  function waitForTable() {
-    // Try immediate initialization
-    initExtension().then(success => {
-      if (success) {
-        // Still set up observer for SPA navigation
-        setupSPAObserver();
-      }
-    });
-
-    // Set up observer for delayed table rendering
-    const bodyObserver = new MutationObserver((mutations, obs) => {
-      const table = document.querySelector('table.holocene-table');
-      if (table) {
-        console.log('[Temporal Extension] Table detected');
-        initExtension().then(success => {
-          if (success) {
-            // Disconnect observer after successful initialization
-            bodyObserver.disconnect();
-          }
-        });
-      }
-    });
-
-    bodyObserver.observe(document.body, {
-      childList: true,
-      subtree: true
-    });
-
-    // Set up observer for SPA navigation
-    setupSPAObserver();
-  }
-
-  // Set up observer for SPA navigation (URL changes without page reload)
-  function setupSPAObserver() {
+  // Persistent DOM observer that watches for table changes.
+  // Svelte can re-render the entire table at any time, so we need
+  // a resilient observer that never disconnects and re-injects our
+  // column whenever it detects the table has been re-rendered.
+  function setupPersistentObserver() {
     let lastUrl = location.href;
-    const navigationObserver = new MutationObserver(() => {
+
+    const observer = new MutationObserver(() => {
+      // Check for SPA navigation
       const currentUrl = location.href;
       if (currentUrl !== lastUrl) {
         lastUrl = currentUrl;
         console.log('[Temporal Extension] URL changed, reinitializing');
-        // Wait a bit for the new page to render
-        setTimeout(() => {
-          initExtension();
-        }, SPA_NAVIGATION_DELAY);
+        setTimeout(() => initExtension(), SPA_NAVIGATION_DELAY);
+        return;
+      }
+
+      if (!extensionEnabled) return;
+
+      // Check if the table exists but is missing our column
+      const table = document.querySelector('table.holocene-table');
+      if (table) {
+        // If the table doesn't have our header, Svelte re-rendered it
+        if (!hasTenantHeader(table)) {
+          scheduleReprocess();
+          return;
+        }
+
+        // Check if there are unprocessed rows (new rows added by pagination, etc.)
+        const tbody = table.querySelector('tbody');
+        if (tbody) {
+          const unprocessedRows = tbody.querySelectorAll('tr:not(:has(.tenant-name-cell))');
+          if (unprocessedRows.length > 0) {
+            scheduleReprocess();
+          }
+        }
       }
     });
 
-    navigationObserver.observe(document.body, {
+    observer.observe(document.body, {
       childList: true,
       subtree: true
     });
+
+    console.log('[Temporal Extension] Set up persistent DOM observer');
   }
 
   // Set up storage change listener
@@ -273,25 +264,39 @@
   ext.setupSiteSettingsListener('temporal', {
     onDisabled: () => {
       console.log('[Temporal Extension] Disabled via settings, stopping');
+      extensionEnabled = false;
       // Remove any added columns
       const table = document.querySelector('table.holocene-table');
       if (table) {
-        // Remove tenant name cells and header
         table.querySelectorAll('.tenant-name-cell').forEach(cell => cell.remove());
         table.querySelectorAll('.tenant-name-header').forEach(header => header.remove());
       }
     },
     onEnabled: () => {
       console.log('[Temporal Extension] Enabled via settings, reinitializing');
+      extensionEnabled = true;
       initExtension();
     }
   });
 
   // Start the extension
+  async function start() {
+    // Set up the persistent observer first — it will catch any table
+    // that appears or re-renders regardless of timing
+    setupPersistentObserver();
+
+    // Try immediate initialization
+    const success = await initExtension();
+    if (!success) {
+      // Table not ready yet; the persistent observer will pick it up
+      console.log('[Temporal Extension] Waiting for table to appear...');
+    }
+  }
+
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', waitForTable);
+    document.addEventListener('DOMContentLoaded', start);
   } else {
-    waitForTable();
+    start();
   }
 
 })();
